@@ -1,0 +1,16 @@
+version: "3.9"
+
+services:
+  auth-service:
+    build: ./src/auth-service
+    container_name: auth-service
+    ports:
+      - "5000:5000"
+    environment:
+      - SECRET_KEY=Zxyafenvd43790
+
+  frontend:
+    build: ./src/jewelry-store
+    container_name: jewelry-store
+    ports:
+      - "3000:80"
