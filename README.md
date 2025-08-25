@@ -250,3 +250,82 @@ For technical questions or issues:
 4. Test individual services in isolation
 
 Good luck with your development and containerization journey! 🚀
+
+
+# 💎 Luxe Jewelry Store - Full-Stack E-Commerce Application: How to run
+
+## 📖 Project Overview
+This is a complete e-commerce jewelry store application built with modern microservices architecture. The application demonstrates full-stack development, API design, user authentication, and containerization practices.
+
+## 🏗️ Architecture
+The project consists of three main components:
+- **React Frontend (Port 3000)** – User interface and shopping experience
+- **Main API Service (Port 8000)** – Product catalog and shopping cart management
+- **Authentication Service (Port 8001)** – User registration, login, and profile management
+
+## 🛠️ Technology Stack
+**Frontend:** React 18, CSS3, Fetch API, LocalStorage  
+**Backend:** FastAPI, Pydantic, JWT, Bcrypt, HTTPX, Uvicorn  
+**Containerization:** Docker, Docker Compose  
+**CI/CD:** Jenkins, Docker Hub  
+
+## Running the Application Locally
+### Prerequisites
+- Python 3.8+
+- Node.js 14+
+- npm or yarn
+
+### Step 1: Authentication Service
+```bash
+cd src/auth-service
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+echo "JWT_SECRET_KEY=Zxyafenvd43790" > .env
+uvicorn main:app --reload --port 8001
+
+Step 2: Main API Service
+
+cd ../backend
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+echo -e "JWT_SECRET_KEY=Zxyafenvd43790\nAUTH_SERVICE_URL=http://localhost:8001" > .env
+uvicorn main:app --reload --port 8000
+
+Step 3: React Frontend Service
+
+cd ../jewelry-store
+npm install
+echo -e "REACT_APP_API_BASE_URL=http://localhost:8000\nREACT_APP_AUTH_BASE_URL=http://localhost:8001" > .env
+npm start
+
+Step 4: Verify
+
+Open your browser at http://localhost:3000 and test:
+
+Browse products
+
+Add items to cart
+
+Register/login
+
+View profile
+
+🐳 Running with Docker
+
+Docker Compose is used to run all services in containers.
+
+Docker Compose:
+
+docker-compose up --build
+
+Services started:
+
+Authentication Service (auth-service)
+
+Main API Service (backend)
+
+Frontend (frontend)
+
+Open http://localhost:3000 to use the app.
