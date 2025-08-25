@@ -9,8 +9,21 @@ services:
     environment:
       - SECRET_KEY=Zxyafenvd43790
 
+  backend:
+    build: ./src/backend
+    container_name: backend
+    ports:
+      - "8000:8000"
+    environment:
+      - SECRET_KEY=Zxyafenvd43790
+      - AUTH_SERVICE_URL=http://auth-service:5000
+    depends_on:
+      - auth-service
+
   frontend:
     build: ./src/jewelry-store
     container_name: jewelry-store
     ports:
       - "3000:80"
+    depends_on:
+      - backend
