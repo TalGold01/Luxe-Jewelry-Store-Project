@@ -2,28 +2,32 @@ version: "3.9"
 
 services:
   auth-service:
-    build: ./src/auth-service
+    image: talgold01/luxe-jewelry-auth-service:latest
     container_name: auth-service
     ports:
-      - "5000:5000"
+      - "8001:8001"
     environment:
-      - SECRET_KEY=Zxyafenvd43790
+      - SECRET_KEY=${SECRET_KEY}          # Provided at runtime via Jenkins
+      - FLASK_RUN_HOST=0.0.0.0
+      - FLASK_ENV=development
 
   backend:
-    build: ./src/backend
+    image: talgold01/luxe-jewelry-backend:latest
     container_name: backend
     ports:
       - "8000:8000"
     environment:
-      - SECRET_KEY=Zxyafenvd43790
-      - AUTH_SERVICE_URL=http://auth-service:5000
-    depends_on:
-      - auth-service
+      - SECRET_KEY=${SECRET_KEY}          # Provided via Jenkins
+      - AUTH_SERVICE_URL=http://auth-service:8001
+      - FLASK_RUN_HOST=0.0.0.0
+      - FLASK_ENV=development
 
   frontend:
-    build: ./src/jewelry-store
+    image: talgold01/luxe-jewelry-frontend:latest
     container_name: jewelry-store
     ports:
       - "3000:80"
-    depends_on:
-      - backend
+    environment:
+      - REACT_APP_API_BASE_URL=http://backend:8000
+      - REACT_APP_AUTH_BASE_URL=http://auth-service:8001
+
