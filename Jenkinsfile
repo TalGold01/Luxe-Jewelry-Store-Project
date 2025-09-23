@@ -18,9 +18,9 @@ pipeline {
         NEXUS_REGISTRY      = 'localhost:8082/docker-hosted'
         PROJECT_NAME        = 'luxe-jewelry-store-project'
 
-        AUTH_SERVICE_IMAGE_DH = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}-auth-service:latest"
-        BACKEND_IMAGE_DH      = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}-backend:latest"
-        FRONTEND_IMAGE_DH     = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}-frontend:latest"
+        AUTH_SERVICE_IMAGE   = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}-auth-service:latest"
+        BACKEND_IMAGE        = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}-backend:latest"
+        FRONTEND_IMAGE       = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}-frontend:latest"
 
         AUTH_SERVICE_IMAGE_NX = "${NEXUS_REGISTRY}/auth-service:latest"
         BACKEND_IMAGE_NX      = "${NEXUS_REGISTRY}/backend:latest"
@@ -43,9 +43,19 @@ pipeline {
         stage('Build Docker Images') {
             steps {
                 script {
-                    sh "docker build -t ${AUTH_SERVICE_IMAGE_DH} ./auth-service"
-                    sh "docker build -t ${BACKEND_IMAGE_DH} ./backend"
-                    sh "docker build -t ${FRONTEND_IMAGE_DH} ./frontend"
+                    // Build all images from docker-compose.yml
+                    sh 'docker-compose build'
+                }
+            }
+        }
+
+        stage('Pull Docker Images') {
+            steps {
+                script {
+                    // Pull latest images from DockerHub to compare; don't fail if missing
+                    sh "docker pull ${AUTH_SERVICE_IMAGE} || true"
+                    sh "docker pull ${BACKEND_IMAGE} || true"
+                    sh "docker pull ${FRONTEND_IMAGE} || true"
                 }
             }
         }
@@ -53,7 +63,7 @@ pipeline {
         stage('Test') {
             steps {
                 script {
-                    dir('/projects/Luxe-Jewelry-Store-Project/test') {
+                    dir('test') {
                         sh 'pytest --maxfail=1 --disable-warnings -q'
                     }
                 }
@@ -64,36 +74,36 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'SNYK_TOKEN', variable: 'SNYK_TOKEN')]) {
                     sh "snyk auth ${SNYK_TOKEN}"
-                    sh "snyk test --docker ${BACKEND_IMAGE_DH} --severity-threshold=high"
-                    sh "snyk test --docker ${FRONTEND_IMAGE_DH} --severity-threshold=high"
-                    sh "snyk test --docker ${AUTH_SERVICE_IMAGE_DH} --severity-threshold=high"
+                    sh "snyk test --docker ${BACKEND_IMAGE} --severity-threshold=high"
+                    sh "snyk test --docker ${FRONTEND_IMAGE} --severity-threshold=high"
+                    sh "snyk test --docker ${AUTH_SERVICE_IMAGE} --severity-threshold=high"
                 }
             }
         }
 
         stage('Push Docker Images') {
             steps {
-                // Push to DockerHub
-                withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                    sh """
-                        echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                        docker push ${AUTH_SERVICE_IMAGE_DH}
-                        docker push ${BACKEND_IMAGE_DH}
-                        docker push ${FRONTEND_IMAGE_DH}
-                    """
-                }
+                script {
+                    // Push to DockerHub using docker-compose
+                    withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        sh """
+                            echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
+                            docker-compose push
+                        """
+                    }
 
-                // Tag & Push to Nexus
-                withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
-                    sh """
-                        echo "$NEXUS_PASS" | docker login -u "$NEXUS_USER" --password-stdin $NEXUS_REGISTRY
-                        docker tag ${AUTH_SERVICE_IMAGE_DH} ${AUTH_SERVICE_IMAGE_NX}
-                        docker tag ${BACKEND_IMAGE_DH} ${BACKEND_IMAGE_NX}
-                        docker tag ${FRONTEND_IMAGE_DH} ${FRONTEND_IMAGE_NX}
-                        docker push ${AUTH_SERVICE_IMAGE_NX}
-                        docker push ${BACKEND_IMAGE_NX}
-                        docker push ${FRONTEND_IMAGE_NX}
-                    """
+                    // Tag & Push to Nexus
+                    withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                        sh """
+                            echo "$NEXUS_PASS" | docker login -u "$NEXUS_USER" --password-stdin $NEXUS_REGISTRY
+                            docker tag ${AUTH_SERVICE_IMAGE} ${AUTH_SERVICE_IMAGE_NX}
+                            docker tag ${BACKEND_IMAGE} ${BACKEND_IMAGE_NX}
+                            docker tag ${FRONTEND_IMAGE} ${FRONTEND_IMAGE_NX}
+                            docker push ${AUTH_SERVICE_IMAGE_NX}
+                            docker push ${BACKEND_IMAGE_NX}
+                            docker push ${FRONTEND_IMAGE_NX}
+                        """
+                    }
                 }
             }
         }
