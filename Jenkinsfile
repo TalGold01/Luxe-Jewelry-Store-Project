@@ -13,12 +13,17 @@ pipeline {
     }
 
     environment {
-        DOCKER_REGISTRY   = 'talgold01'
-        PROJECT_NAME      = 'luxe-jewelry-store-project'
+        DOCKERHUB_REGISTRY  = 'talgold01'
+        NEXUS_REGISTRY      = 'localhost:8082/docker-hosted'
+        PROJECT_NAME        = 'luxe-jewelry-store-project'
 
-        AUTH_SERVICE_IMAGE = "${DOCKER_REGISTRY}/${PROJECT_NAME}-auth-service:latest"
-        BACKEND_IMAGE      = "${DOCKER_REGISTRY}/${PROJECT_NAME}-backend:latest"
-        FRONTEND_IMAGE     = "${DOCKER_REGISTRY}/${PROJECT_NAME}-frontend:latest"
+        AUTH_SERVICE_IMAGE_DH = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}-auth-service:latest"
+        BACKEND_IMAGE_DH      = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}-backend:latest"
+        FRONTEND_IMAGE_DH     = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}-frontend:latest"
+
+        AUTH_SERVICE_IMAGE_NX = "${NEXUS_REGISTRY}/auth-service:latest"
+        BACKEND_IMAGE_NX      = "${NEXUS_REGISTRY}/backend:latest"
+        FRONTEND_IMAGE_NX     = "${NEXUS_REGISTRY}/frontend:latest"
     }
 
     triggers {
@@ -37,9 +42,9 @@ pipeline {
         stage('Build Docker Images') {
             steps {
                 script {
-                    sh "docker build -t ${AUTH_SERVICE_IMAGE} ./auth-service"
-                    sh "docker build -t ${BACKEND_IMAGE} ./backend"
-                    sh "docker build -t ${FRONTEND_IMAGE} ./frontend"
+                    sh "docker build -t ${AUTH_SERVICE_IMAGE_DH} ./auth-service"
+                    sh "docker build -t ${BACKEND_IMAGE_DH} ./backend"
+                    sh "docker build -t ${FRONTEND_IMAGE_DH} ./frontend"
                 }
             }
         }
@@ -58,21 +63,35 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'SNYK_TOKEN', variable: 'SNYK_TOKEN')]) {
                     sh "snyk auth ${SNYK_TOKEN}"
-                    sh "snyk test --docker ${BACKEND_IMAGE} --severity-threshold=high"
-                    sh "snyk test --docker ${FRONTEND_IMAGE} --severity-threshold=high"
-                    sh "snyk test --docker ${AUTH_SERVICE_IMAGE} --severity-threshold=high"
+                    sh "snyk test --docker ${BACKEND_IMAGE_DH} --severity-threshold=high"
+                    sh "snyk test --docker ${FRONTEND_IMAGE_DH} --severity-threshold=high"
+                    sh "snyk test --docker ${AUTH_SERVICE_IMAGE_DH} --severity-threshold=high"
                 }
             }
         }
 
-        stage('Push to DockerHub') {
+        stage('Push Docker Images') {
             steps {
+                // Push to DockerHub
                 withCredentials([usernamePassword(credentialsId: 'docker-hub', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
                     sh """
                         echo "$DOCKER_PASS" | docker login -u "$DOCKER_USER" --password-stdin
-                        docker push ${AUTH_SERVICE_IMAGE}
-                        docker push ${BACKEND_IMAGE}
-                        docker push ${FRONTEND_IMAGE}
+                        docker push ${AUTH_SERVICE_IMAGE_DH}
+                        docker push ${BACKEND_IMAGE_DH}
+                        docker push ${FRONTEND_IMAGE_DH}
+                    """
+                }
+
+                // Tag & Push to Nexus
+                withCredentials([usernamePassword(credentialsId: 'nexus-creds', usernameVariable: 'NEXUS_USER', passwordVariable: 'NEXUS_PASS')]) {
+                    sh """
+                        echo "$NEXUS_PASS" | docker login -u "$NEXUS_USER" --password-stdin $NEXUS_REGISTRY
+                        docker tag ${AUTH_SERVICE_IMAGE_DH} ${AUTH_SERVICE_IMAGE_NX}
+                        docker tag ${BACKEND_IMAGE_DH} ${BACKEND_IMAGE_NX}
+                        docker tag ${FRONTEND_IMAGE_DH} ${FRONTEND_IMAGE_NX}
+                        docker push ${AUTH_SERVICE_IMAGE_NX}
+                        docker push ${BACKEND_IMAGE_NX}
+                        docker push ${FRONTEND_IMAGE_NX}
                     """
                 }
             }
