@@ -21,13 +21,13 @@ pipeline {
         PROJECT_NAME        = 'luxe-jewelry-store-project'
         DEPLOY_ENV          = 'development' // change to staging or production as needed
 
-        # Docker Hub tags (single repo with different tags)
+        //  Docker Hub tags (single repo with different tags)
         JENKINS_AGENT_IMAGE  = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}:jenkins-agent"
         AUTH_SERVICE_IMAGE   = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}:auth-service"
         BACKEND_IMAGE        = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}:backend"
         FRONTEND_IMAGE       = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}:frontend"
 
-        # Nexus tags
+        //  Nexus tags
         JENKINS_AGENT_IMAGE_NX  = "${NEXUS_REGISTRY}/jenkins-agent"
         AUTH_SERVICE_IMAGE_NX   = "${NEXUS_REGISTRY}/auth-service"
         BACKEND_IMAGE_NX        = "${NEXUS_REGISTRY}/backend"
