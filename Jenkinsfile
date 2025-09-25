@@ -21,13 +21,13 @@ pipeline {
         PROJECT_NAME        = 'luxe-jewelry-store-project'
         DEPLOY_ENV          = 'development' // change to staging or production as needed
 
-        //  Docker Hub tags (single repo with different tags)
+        // Docker Hub tags (single repo with different tags)
         JENKINS_AGENT_IMAGE  = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}:jenkins-agent"
         AUTH_SERVICE_IMAGE   = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}:auth-service"
         BACKEND_IMAGE        = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}:backend"
         FRONTEND_IMAGE       = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}:frontend"
 
-        //  Nexus tags
+        // Nexus tags
         JENKINS_AGENT_IMAGE_NX  = "${NEXUS_REGISTRY}/jenkins-agent"
         AUTH_SERVICE_IMAGE_NX   = "${NEXUS_REGISTRY}/auth-service"
         BACKEND_IMAGE_NX        = "${NEXUS_REGISTRY}/backend"
@@ -78,12 +78,14 @@ pipeline {
 
         stage('Snyk Scan') {
             steps {
-                withCredentials([string(credentialsId: 'SNYK_TOKEN', variable: 'SNYK_TOKEN')]) {
-                    sh "snyk auth ${SNYK_TOKEN}"
-                    dockerUtils.snykScan(JENKINS_AGENT_IMAGE)
-                    dockerUtils.snykScan(AUTH_SERVICE_IMAGE)
-                    dockerUtils.snykScan(BACKEND_IMAGE)
-                    dockerUtils.snykScan(FRONTEND_IMAGE)
+                script { // Added a script block to resolve the "Method calls on objects not allowed outside 'script' blocks" error
+                    withCredentials([string(credentialsId: 'SNYK_TOKEN', variable: 'SNYK_TOKEN')]) {
+                        sh "snyk auth ${SNYK_TOKEN}"
+                        dockerUtils.snykScan(JENKINS_AGENT_IMAGE)
+                        dockerUtils.snykScan(AUTH_SERVICE_IMAGE)
+                        dockerUtils.snykScan(BACKEND_IMAGE)
+                        dockerUtils.snykScan(FRONTEND_IMAGE)
+                    }
                 }
             }
         }
@@ -111,13 +113,15 @@ pipeline {
                 script {
                     echo "Deploying services to environment: ${DEPLOY_ENV}"
 
-                    // Stop existing containers if running
-                    sh 'docker-compose down || true'
+                    dir('infra') { // Change into the infra directory where docker-compose.yml is located
+                        // Stop existing containers if running
+                        sh 'docker-compose down || true'
 
-                    // Deploy new containers
-                    sh "docker-compose -f docker-compose.yml up -d"
+                        // Deploy new containers
+                        sh "docker-compose -f docker-compose.yml up -d"
 
-                    echo "Deployment complete for ${DEPLOY_ENV}"
+                        echo "Deployment complete for ${DEPLOY_ENV}"
+                    }
                 }
             }
         }
