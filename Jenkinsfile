@@ -3,7 +3,7 @@
 pipeline {
     agent {
         docker {
-            image 'talgold01/luxe-jewelry-store-project:jenkins-agent-latest'
+            image 'talgold01/luxe-jewelry-store-project:jenkins-agent'
             args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
             reuseNode true
         }
@@ -19,16 +19,19 @@ pipeline {
         DOCKERHUB_REGISTRY  = 'talgold01'
         NEXUS_REGISTRY      = 'localhost:8082/docker-hosted'
         PROJECT_NAME        = 'luxe-jewelry-store-project'
-        
-        DEPLOY_ENV          = 'development' // can be changed to 'staging' or 'production'
+        DEPLOY_ENV          = 'development' // change to staging or production as needed
 
-        AUTH_SERVICE_IMAGE   = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}-auth-service:latest"
-        BACKEND_IMAGE        = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}-backend:latest"
-        FRONTEND_IMAGE       = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}-frontend:latest"
+        # Docker Hub tags (single repo with different tags)
+        JENKINS_AGENT_IMAGE  = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}:jenkins-agent"
+        AUTH_SERVICE_IMAGE   = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}:auth-service"
+        BACKEND_IMAGE        = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}:backend"
+        FRONTEND_IMAGE       = "${DOCKERHUB_REGISTRY}/${PROJECT_NAME}:frontend"
 
-        AUTH_SERVICE_IMAGE_NX = "${NEXUS_REGISTRY}/auth-service:latest"
-        BACKEND_IMAGE_NX      = "${NEXUS_REGISTRY}/backend:latest"
-        FRONTEND_IMAGE_NX     = "${NEXUS_REGISTRY}/frontend:latest"
+        # Nexus tags
+        JENKINS_AGENT_IMAGE_NX  = "${NEXUS_REGISTRY}/jenkins-agent"
+        AUTH_SERVICE_IMAGE_NX   = "${NEXUS_REGISTRY}/auth-service"
+        BACKEND_IMAGE_NX        = "${NEXUS_REGISTRY}/backend"
+        FRONTEND_IMAGE_NX       = "${NEXUS_REGISTRY}/frontend"
     }
 
     triggers {
@@ -36,7 +39,6 @@ pipeline {
     }
 
     stages {
-
         stage('Checkout') {
             steps {
                 git branch: 'main',
@@ -48,6 +50,7 @@ pipeline {
         stage('Build Docker Images') {
             steps {
                 script {
+                    dockerUtils.buildAndTagImage('jenkins-agent', JENKINS_AGENT_IMAGE, JENKINS_AGENT_IMAGE_NX)
                     dockerUtils.buildAndTagImage('auth-service', AUTH_SERVICE_IMAGE, AUTH_SERVICE_IMAGE_NX)
                     dockerUtils.buildAndTagImage('backend', BACKEND_IMAGE, BACKEND_IMAGE_NX)
                     dockerUtils.buildAndTagImage('frontend', FRONTEND_IMAGE, FRONTEND_IMAGE_NX)
@@ -55,10 +58,10 @@ pipeline {
             }
         }
 
-        stage('Pull Docker Images') {
+        stage('Pull Latest Images') {
             steps {
                 script {
-                    dockerUtils.pullLatestImages(AUTH_SERVICE_IMAGE, BACKEND_IMAGE, FRONTEND_IMAGE)
+                    dockerUtils.pullLatestImages(JENKINS_AGENT_IMAGE, AUTH_SERVICE_IMAGE, BACKEND_IMAGE, FRONTEND_IMAGE)
                 }
             }
         }
@@ -77,6 +80,7 @@ pipeline {
             steps {
                 withCredentials([string(credentialsId: 'SNYK_TOKEN', variable: 'SNYK_TOKEN')]) {
                     sh "snyk auth ${SNYK_TOKEN}"
+                    dockerUtils.snykScan(JENKINS_AGENT_IMAGE)
                     dockerUtils.snykScan(AUTH_SERVICE_IMAGE)
                     dockerUtils.snykScan(BACKEND_IMAGE)
                     dockerUtils.snykScan(FRONTEND_IMAGE)
@@ -87,10 +91,14 @@ pipeline {
         stage('Push Docker Images') {
             steps {
                 script {
+                    // Docker Hub
+                    dockerUtils.pushToDockerHub(JENKINS_AGENT_IMAGE)
                     dockerUtils.pushToDockerHub(AUTH_SERVICE_IMAGE)
                     dockerUtils.pushToDockerHub(BACKEND_IMAGE)
                     dockerUtils.pushToDockerHub(FRONTEND_IMAGE)
 
+                    // Nexus
+                    dockerUtils.pushToNexus(JENKINS_AGENT_IMAGE_NX, NEXUS_REGISTRY)
                     dockerUtils.pushToNexus(AUTH_SERVICE_IMAGE_NX, NEXUS_REGISTRY)
                     dockerUtils.pushToNexus(BACKEND_IMAGE_NX, NEXUS_REGISTRY)
                     dockerUtils.pushToNexus(FRONTEND_IMAGE_NX, NEXUS_REGISTRY)
@@ -103,10 +111,10 @@ pipeline {
                 script {
                     echo "Deploying services to environment: ${DEPLOY_ENV}"
 
-                    // Optional: stop existing containers before deploy
+                    // Stop existing containers if running
                     sh 'docker-compose down || true'
 
-                    // Run containers using latest images
+                    // Deploy new containers
                     sh "docker-compose -f docker-compose.yml up -d"
 
                     echo "Deployment complete for ${DEPLOY_ENV}"
