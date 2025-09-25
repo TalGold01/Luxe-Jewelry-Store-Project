@@ -39,6 +39,15 @@ pipeline {
     }
 
     stages {
+        stage('Setup Docker Compose') {
+            steps {
+                script {
+                    echo "Installing Docker Compose..."
+                    sh 'apt-get update && apt-get install -y docker-compose'
+                }
+            }
+        }
+        
         stage('Checkout') {
             steps {
                 git branch: 'main',
@@ -46,7 +55,7 @@ pipeline {
                     credentialsId: 'github-creds'
             }
         }
-
+        // ... (rest of your stages remain the same)
         stage('Build Docker Images') {
             steps {
                 script {
@@ -78,7 +87,7 @@ pipeline {
 
         stage('Snyk Scan') {
             steps {
-                script { // Added a script block to resolve the "Method calls on objects not allowed outside 'script' blocks" error
+                script {
                     withCredentials([string(credentialsId: 'SNYK_TOKEN', variable: 'SNYK_TOKEN')]) {
                         sh "snyk auth ${SNYK_TOKEN}"
                         dockerUtils.snykScan(JENKINS_AGENT_IMAGE)
@@ -113,7 +122,7 @@ pipeline {
                 script {
                     echo "Deploying services to environment: ${DEPLOY_ENV}"
 
-                    dir('infra') { // Change into the infra directory where docker-compose.yml is located
+                    dir('infra') {
                         // Stop existing containers if running
                         sh 'docker-compose down || true'
 
