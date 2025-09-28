@@ -39,9 +39,6 @@ pipeline {
     }
 
     triggers {
-        webhookTrigger([
-        ])
-        
         githubPush()
     }
 
@@ -146,10 +143,9 @@ pipeline {
 
     post {
         always {
-            node() {
+            script {
                 echo "Cleaning up Docker images from Jenkins agent"
                 sh "docker system prune -af || true"
             }
         }
     }
-}
