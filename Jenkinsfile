@@ -34,8 +34,8 @@ pipeline {
         BACKEND_IMAGE_NX        = "${NEXUS_REGISTRY}/backend"
         FRONTEND_IMAGE_NX       = "${NEXUS_REGISTRY}/frontend"
         GITHUB_CREDENTIALS       = credentials('github-creds')
-        SNYK_TOKEN               = credentials('snyk-token')
-
+        // FIX: Removed invalid 'credentials()' call here to stop the compilation error
+        // SNYK_TOKEN is now ONLY loaded securely in the 'Snyk Scan' stage
     }
 
     triggers {
@@ -52,7 +52,7 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Checkout') {
             steps {
                 git branch: 'main',
@@ -60,7 +60,7 @@ pipeline {
                     credentialsId: 'github-creds'
             }
         }
-        // ... (rest of your stages remain the same)
+
         stage('Build Docker Images') {
             steps {
                 script {
@@ -93,6 +93,8 @@ pipeline {
         stage('Snyk Scan') {
             steps {
                 script {
+                    // FIX: This secure step now correctly loads the 'SNYK_TOKEN' credential
+                    // into a variable named 'SNYK_TOKEN' for use in the shell.
                     withCredentials([string(credentialsId: 'SNYK_TOKEN', variable: 'SNYK_TOKEN')]) {
                         sh "snyk auth ${SNYK_TOKEN}"
                         dockerUtils.snykScan(JENKINS_AGENT_IMAGE)
@@ -137,6 +139,16 @@ pipeline {
                         echo "Deployment complete for ${DEPLOY_ENV}"
                     }
                 }
+            }
+        }
+    }
+    
+    // RECOMMENDED CLEANUP ADDED (Fixing the previous syntax issues)
+    post {
+        always {
+            script {
+                echo "Cleaning up Docker images from Jenkins agent"
+                sh "docker system prune -af || true"
             }
         }
     }
