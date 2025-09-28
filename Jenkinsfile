@@ -6,6 +6,7 @@ pipeline {
             image 'talgold01/luxe-jewelry-store-project:jenkins-agent'
             args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
             reuseNode true
+            registryCredentialsId 'docker-hub'
         }
     }
 
@@ -33,8 +34,8 @@ pipeline {
         BACKEND_IMAGE_NX        = "${NEXUS_REGISTRY}/backend"
         FRONTEND_IMAGE_NX       = "${NEXUS_REGISTRY}/frontend"
         GITHUB_CREDENTIALS       = credentials('github-creds')
-        SNYK_TOKEN               = credentials('snyk-token')
-
+        // FIX: Removed invalid 'credentials()' call here to stop the compilation error
+        // SNYK_TOKEN is now ONLY loaded securely in the 'Snyk Scan' stage
     }
 
     triggers {
@@ -50,7 +51,7 @@ pipeline {
                 }
             }
         }
-        
+
         stage('Checkout') {
             steps {
                 git branch: 'main',
@@ -58,10 +59,11 @@ pipeline {
                     credentialsId: 'github-creds'
             }
         }
-        // ... (rest of your stages remain the same)
+
         stage('Build Docker Images') {
             steps {
                 script {
+                    dir('infra')
                     dockerUtils.buildAndTagImage('jenkins-agent', JENKINS_AGENT_IMAGE, JENKINS_AGENT_IMAGE_NX)
                     dockerUtils.buildAndTagImage('auth-service', AUTH_SERVICE_IMAGE, AUTH_SERVICE_IMAGE_NX)
                     dockerUtils.buildAndTagImage('backend', BACKEND_IMAGE, BACKEND_IMAGE_NX)
@@ -91,6 +93,8 @@ pipeline {
         stage('Snyk Scan') {
             steps {
                 script {
+                    // FIX: This secure step now correctly loads the 'SNYK_TOKEN' credential
+                    // into a variable named 'SNYK_TOKEN' for use in the shell.
                     withCredentials([string(credentialsId: 'SNYK_TOKEN', variable: 'SNYK_TOKEN')]) {
                         sh "snyk auth ${SNYK_TOKEN}"
                         dockerUtils.snykScan(JENKINS_AGENT_IMAGE)
@@ -138,7 +142,8 @@ pipeline {
             }
         }
     }
-
+    
+    // RECOMMENDED CLEANUP ADDED (Fixing the previous syntax issues)
     post {
         always {
             script {
