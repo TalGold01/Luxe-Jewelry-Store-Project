@@ -38,6 +38,10 @@ pipeline {
     }
 
     triggers {
+        webhookTrigger([
+        url: 'https://bdc372440305.ngrok-free.app'
+        ])
+        
         githubPush()
     }
 
@@ -47,6 +51,7 @@ pipeline {
                 script {
                     echo "Installing Docker Compose..."
                     sh 'apt-get update && apt-get install -y docker-compose'
+                    sh 'cp infra/docker-compose.yml /tmp/docker-compose.yml'
                 }
             }
         }
