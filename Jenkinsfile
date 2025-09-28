@@ -6,6 +6,7 @@ pipeline {
             image 'talgold01/luxe-jewelry-store-project:jenkins-agent'
             args '--user root -v /var/run/docker.sock:/var/run/docker.sock'
             reuseNode true
+            registryCredentialsId 'docker-hub'
         }
     }
 
@@ -39,7 +40,6 @@ pipeline {
 
     triggers {
         webhookTrigger([
-        url: 'https://bdc372440305.ngrok-free.app'
         ])
         
         githubPush()
@@ -146,7 +146,7 @@ pipeline {
 
     post {
         always {
-            script {
+            node() {
                 echo "Cleaning up Docker images from Jenkins agent"
                 sh "docker system prune -af || true"
             }
