@@ -32,6 +32,9 @@ pipeline {
         AUTH_SERVICE_IMAGE_NX   = "${NEXUS_REGISTRY}/auth-service"
         BACKEND_IMAGE_NX        = "${NEXUS_REGISTRY}/backend"
         FRONTEND_IMAGE_NX       = "${NEXUS_REGISTRY}/frontend"
+        GITHUB_CREDENTIALS       = credentials('github-creds')
+        SNYK_TOKEN               = credentials('snyk-token')
+
     }
 
     triggers {
