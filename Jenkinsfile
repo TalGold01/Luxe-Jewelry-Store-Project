@@ -48,7 +48,6 @@ pipeline {
                 script {
                     echo "Installing Docker Compose..."
                     sh 'apt-get update && apt-get install -y docker-compose'
-                    sh 'cp infra/docker-compose.yml /tmp/docker-compose.yml'
                 }
             }
         }
@@ -64,6 +63,7 @@ pipeline {
         stage('Build Docker Images') {
             steps {
                 script {
+                    dir('infra')
                     dockerUtils.buildAndTagImage('jenkins-agent', JENKINS_AGENT_IMAGE, JENKINS_AGENT_IMAGE_NX)
                     dockerUtils.buildAndTagImage('auth-service', AUTH_SERVICE_IMAGE, AUTH_SERVICE_IMAGE_NX)
                     dockerUtils.buildAndTagImage('backend', BACKEND_IMAGE, BACKEND_IMAGE_NX)
