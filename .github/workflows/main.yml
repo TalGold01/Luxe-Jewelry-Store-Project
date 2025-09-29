@@ -1,0 +1,112 @@
+name: CI/CD Pipeline - Luxe Jewelry Store
+
+# 1. Trigger the workflow on pushes to the main branch
+on:
+  push:
+    branches:
+      - main
+
+# Define global environment variables
+env:
+  DOCKERHUB_REGISTRY: talgold01
+  NEXUS_REGISTRY: localhost:8082/docker-hosted
+  PROJECT_NAME: luxe-jewelry-store-project
+  # Use GitHub's built-in run ID for versioning the image tag
+  IMAGE_VERSION: ${{ github.run_id }} 
+  # Set up Nexus repository URL structure
+  AUTH_SERVICE_IMAGE_NX: ${{ env.NEXUS_REGISTRY }}/auth-service:${{ env.IMAGE_VERSION }}
+  BACKEND_IMAGE_NX: ${{ env.NEXUS_REGISTRY }}/backend:${{ env.IMAGE_VERSION }}
+  FRONTEND_IMAGE_NX: ${{ env.NEXUS_REGISTRY }}/frontend:${{ env.IMAGE_VERSION }}
+  JENKINS_AGENT_IMAGE_NX: ${{ env.NEXUS_REGISTRY }}/jenkins-agent:${{ env.IMAGE_VERSION }}
+
+jobs:
+  # The entire pipeline runs on a single runner
+  ci_cd_pipeline:
+    # Use a standard Linux runner with Docker available
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: ⬇️ Checkout Repository
+        uses: actions/checkout@v4
+
+      # --- INSTRUCTOR REQUIREMENT: UNIT TESTS BEFORE BUILD ---
+
+      - name: ⚙️ Set up Python Environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x' # Use a compatible Python version
+
+      - name: 📦 Install Python Dependencies
+        run: pip install pytest # Assuming pytest is the main dependency for tests
+
+      - name: 🧪 Run Unit Tests
+        working-directory: test # Navigate to the 'test' directory
+        run: pytest --maxfail=1 --disable-warnings -q
+        # Failure here stops the entire workflow
+
+      # --- BUILD STAGE (using Nexus versioning) ---
+
+      # Note: We must install Docker Compose on the runner first, as done in Jenkinsfile
+      - name: 🛠️ Setup Docker Compose (apt-get is not needed on Ubuntu runner)
+        # Ubuntu runners usually have docker-compose pre-installed. We verify the version.
+        run: docker-compose version
+
+      - name: 🏗️ Build Docker Images (for Nexus Push)
+        # Navigate to the 'infra' directory where the docker-compose.yml is
+        run: |
+          cd infra
+          # Use docker-compose build with custom tags matching the NEXUS structure and IMAGE_VERSION
+          docker-compose build \
+            --build-arg IMAGE_VERSION=${{ env.IMAGE_VERSION }} \
+            auth-service backend frontend jenkins-agent
+
+          # Manually tag local built images to match the full Nexus tag required for push
+          docker tag luxe-jewelry-store-project_auth-service ${{ env.AUTH_SERVICE_IMAGE_NX }}
+          docker tag luxe-jewelry-store-project_backend ${{ env.BACKEND_IMAGE_NX }}
+          docker tag luxe-jewelry-store-project_frontend ${{ env.FRONTEND_IMAGE_NX }}
+          docker tag luxe-jewelry-store-project_jenkins-agent ${{ env.JENKINS_AGENT_IMAGE_NX }}
+
+      # --- SECURITY SCAN STAGE ---
+
+      - name: 🛡️ Snyk Security Scan
+        # This step will require a custom or third-party Snyk action
+        # Note: You need to set the SNYK_TOKEN as a GitHub Secret
+        uses: snyk/actions/docker@master
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          image: ${{ env.AUTH_SERVICE_IMAGE_NX }} # Scan one image as an example
+          severity: critical
+
+      # --- PUSH STAGE (Only to Nexus) ---
+
+      - name: 🔑 Log in to Nexus Repository (via Docker CLI)
+        # Note: You need to set NEXUS_USERNAME and NEXUS_PASSWORD as GitHub Secrets
+        run: |
+          echo "${{ secrets.NEXUS_PASSWORD }}" | docker login ${{ env.NEXUS_REGISTRY }} \
+          --username ${{ secrets.NEXUS_USERNAME }} \
+          --password-stdin
+      
+      - name: 🚀 Push Images to Nexus (Version Control Implemented)
+        run: |
+          docker push ${{ env.AUTH_SERVICE_IMAGE_NX }}
+          docker push ${{ env.BACKEND_IMAGE_NX }}
+          docker push ${{ env.FRONTEND_IMAGE_NX }}
+          docker push ${{ env.JENKINS_AGENT_IMAGE_NX }}
+          # Removed all pushes to Docker Hub
+
+      # --- DEPLOYMENT STAGE ---
+      
+      # In a real CD setup, this step would deploy to a remote server.
+      # For local Docker setup simulation, we show the command structure.
+      - name: ☁️ Deploy Services (Placeholder for Remote Deploy)
+        run: |
+          echo "Deployment to ${DEPLOY_ENV} initiated using images tagged with version: ${{ env.IMAGE_VERSION }}"
+          # In a remote environment, you would SSH in and run:
+          # ssh user@host "cd /path/to/infra && docker-compose pull && docker-compose up -d"
+
+      # --- POST: CLEANUP ---
+
+      - name: 🧹 Cleanup Docker Resources
+        if: always()
+        run: docker system prune -af
