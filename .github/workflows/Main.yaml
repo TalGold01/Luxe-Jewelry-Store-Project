@@ -1,0 +1,110 @@
+name: CI/CD Pipeline - Luxe Jewelry Store
+
+# 1. Trigger the workflow on pushes to the main branch
+on:
+  push:
+    branches:
+      - main
+
+# Define global environment variables
+env:
+  DOCKERHUB_REGISTRY: talgold01
+  NEXUS_REGISTRY: localhost:8082/docker-hosted  # Use your public IP/DNS if running remotely
+  PROJECT_NAME: luxe-jewelry-store-project
+  DEPLOY_ENV: development
+  # Use GitHub's built-in run ID for versioning the image tag
+  IMAGE_VERSION: ${{ github.run_id }} 
+
+jobs:
+  # The entire pipeline runs on a single runner
+  ci_cd_pipeline:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: ⬇️ Checkout Repository
+        uses: actions/checkout@v4
+
+      # --- INSTRUCTOR REQUIREMENT: UNIT TESTS BEFORE BUILD ---
+
+      - name: ⚙️ Set up Python Environment
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: 📦 Install Python Dependencies
+        run: pip install pytest
+
+      - name: 🧪 Run Unit Tests
+        working-directory: test # Navigate to the 'test' directory
+        run: pytest --maxfail=1 --disable-warnings -q
+
+      # --- BUILD STAGE (using Nexus versioning) ---
+
+      - name: 🛠️ Setup Docker Compose
+        run: docker-compose version
+
+      - name: 🏗️ Build and Tag Docker Images for Nexus
+        # Define the full, versioned tags as variables for use in the 'run' block
+        env:
+          AUTH_TAG: ${{ env.NEXUS_REGISTRY }}/auth-service:${{ env.IMAGE_VERSION }}
+          BACKEND_TAG: ${{ env.NEXUS_REGISTRY }}/backend:${{ env.IMAGE_VERSION }}
+          FRONTEND_TAG: ${{ env.NEXUS_REGISTRY }}/frontend:${{ env.IMAGE_VERSION }}
+          AGENT_TAG: ${{ env.NEXUS_REGISTRY }}/jenkins-agent:${{ env.IMAGE_VERSION }}
+        run: |
+          cd infra
+          # Build images
+          docker-compose build \
+            --build-arg IMAGE_VERSION=${{ env.IMAGE_VERSION }} \
+            auth-service backend frontend jenkins-agent
+          
+          # Manually tag local built images with the Nexus URL and version
+          docker tag luxe-jewelry-store-project_auth-service $AUTH_TAG
+          docker tag luxe-jewelry-store-project_backend $BACKEND_TAG
+          docker tag luxe-jewelry-store-project_frontend $FRONTEND_TAG
+          docker tag luxe-jewelry-store-project_jenkins-agent $AGENT_TAG
+
+      # --- SECURITY SCAN STAGE ---
+      
+      - name: 🛡️ Snyk Security Scan
+        # Define the single tag needed for the scan here
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+          AUTH_TAG: ${{ env.NEXUS_REGISTRY }}/auth-service:${{ env.IMAGE_VERSION }}
+        uses: snyk/actions/docker@master
+        with:
+          image: ${{ env.AUTH_TAG }} # Use the correctly defined tag
+          severity: critical
+
+      # --- PUSH STAGE (Only to Nexus) ---
+
+      - name: 🔑 Log in to Nexus Repository (via Docker CLI)
+        run: |
+          echo "${{ secrets.NEXUS_PASSWORD }}" | docker login ${{ env.NEXUS_REGISTRY }} \
+          --username ${{ secrets.NEXUS_USERNAME }} \
+          --password-stdin
+      
+      - name: 🚀 Push Images to Nexus (Version Control Implemented)
+        # Define the full tags again for the push commands
+        env:
+          AUTH_TAG: ${{ env.NEXUS_REGISTRY }}/auth-service:${{ env.IMAGE_VERSION }}
+          BACKEND_TAG: ${{ env.NEXUS_REGISTRY }}/backend:${{ env.IMAGE_VERSION }}
+          FRONTEND_TAG: ${{ env.NEXUS_REGISTRY }}/frontend:${{ env.IMAGE_VERSION }}
+          AGENT_TAG: ${{ env.NEXUS_REGISTRY }}/jenkins-agent:${{ env.IMAGE_VERSION }}
+        run: |
+          docker push $AUTH_TAG
+          docker push $BACKEND_TAG
+          docker push $FRONTEND_TAG
+          docker push $AGENT_TAG
+
+      # --- DEPLOYMENT STAGE ---
+      
+      - name: ☁️ Deploy Services (Placeholder for Remote Deploy)
+        run: |
+          echo "Deployment to ${{ env.DEPLOY_ENV }} initiated using images tagged with version: ${{ env.IMAGE_VERSION }}"
+          # In a remote environment, replace this with SSH and deployment commands.
+
+      # --- POST: CLEANUP ---
+
+      - name: 🧹 Cleanup Docker Resources
+        if: always()
+        run: docker system prune -af
