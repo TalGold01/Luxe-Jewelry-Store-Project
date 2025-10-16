@@ -34,23 +34,21 @@ jobs:
       - name: 🔑 Set up Snyk
         uses: snyk/actions/setup@master
         with:
-          # Ensure you have SNYK_TOKEN defined as a GitHub secret!
           snyk-token: ${{ secrets.SNYK_TOKEN }}
 
-      # FIX: Use main snyk/actions and specify command: code
+      # Snyk Code Scan (no dependencies required)
       - name: 🛡️ Snyk Code Scan (Source Code)
         uses: snyk/actions@master 
         with:
           command: code
           
-      # FIX: Use main snyk/actions and specify command: test for Python
+      # FIX: Use the snyk/actions/python@master sub-action for Python dependencies
       - name: 🐍 Snyk Open Source Scan (Backend Dependencies)
-        uses: snyk/actions@master 
+        uses: snyk/actions/python@master # <-- FIXED
         with:
-          command: test
           args: --file=backend/requirements.txt --severity=high
 
-      # FIX: Use main snyk/actions and specify command: test for Node
+      # Frontend Scan (uses snyk/actions@master which often defaults to node env, should be okay)
       - name: 🌐 Snyk Open Source Scan (Frontend Dependencies)
         uses: snyk/actions@master 
         with:
@@ -58,7 +56,6 @@ jobs:
           args: --file=frontend/package.json --severity=high
 
       - name: 🐳 Snyk Base Image Analysis (Alpine/Debian/Ubuntu)
-        # This one uses a correct specific sub-action
         uses: snyk/actions/docker@master
         with:
           image: 'node:18' 
