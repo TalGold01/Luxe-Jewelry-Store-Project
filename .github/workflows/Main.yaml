@@ -11,7 +11,7 @@ on:
 # Define global environment variables
 env:
   DOCKERHUB_REGISTRY: talgold01
-  NEXUS_REGISTRY: localhost:8082/docker-hosted
+  NEXUS_REGISTRY: localhost:8082/docker-hosted  # NOTE: Replace 'localhost:8082/docker-hosted' with your actual external Nexus repository URL (e.g., your-nexus-domain:8082/repository/docker-hosted) if Nexus is not running on the GitHub Actions runner.
   PROJECT_NAME: luxe-jewelry-store-project 
   DEPLOY_ENV: development
   
@@ -62,11 +62,10 @@ jobs:
           BACKEND_TAG: ${{ env.NEXUS_REGISTRY }}/backend:${{ env.IMAGE_VERSION }}
           FRONTEND_TAG: ${{ env.NEXUS_REGISTRY }}/frontend:${{ env.IMAGE_VERSION }}
           
-          # FIX: Define the exact source tags without the 'docker.io/' prefix, 
-          # matching the name Docker Compose assigns.
-          AUTH_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-auth-service:latest
-          BACKEND_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-backend:latest
-          FRONTEND_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-frontend:latest
+          # Adjusted to match the naming from docker-compose build (assuming docker-compose.yml uses '-latest' without colon; best practice is to update docker-compose.yml to use ':latest' for explicit tagging)
+          AUTH_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-auth-service-latest
+          BACKEND_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-backend-latest
+          FRONTEND_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-frontend-latest
           
         run: |
           cd infra
@@ -77,10 +76,20 @@ jobs:
             --build-arg IMAGE_VERSION=${{ env.IMAGE_VERSION }} \
             auth-service backend frontend 
           
+          # Debug: List all Docker images to verify names
+          docker images | grep ${{ env.PROJECT_NAME }} || true
+          
           # 2. Manually tag the local images with the correct Nexus tag.
           docker tag $AUTH_SOURCE_TAG $AUTH_TAG
           docker tag $BACKEND_SOURCE_TAG $BACKEND_TAG
           docker tag $FRONTEND_SOURCE_TAG $FRONTEND_TAG
+          
+          # Best practice: If on main branch, also tag and prepare :latest for push
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            docker tag $AUTH_SOURCE_TAG ${{ env.NEXUS_REGISTRY }}/auth-service:latest
+            docker tag $BACKEND_SOURCE_TAG ${{ env.NEXUS_REGISTRY }}/backend:latest
+            docker tag $FRONTEND_SOURCE_TAG ${{ env.NEXUS_REGISTRY }}/frontend:latest
+          fi
           
           echo "All images successfully built and tagged for Nexus."
 
@@ -92,6 +101,22 @@ jobs:
           AUTH_TAG: ${{ env.NEXUS_REGISTRY }}/auth-service:${{ env.IMAGE_VERSION }}
         with:
           image: ${{ env.AUTH_TAG }}
+          severity: critical
+
+      - name: 🛡️ Snyk Final Image Scan (backend)
+        uses: snyk/actions/docker@master
+        env:
+          BACKEND_TAG: ${{ env.NEXUS_REGISTRY }}/backend:${{ env.IMAGE_VERSION }}
+        with:
+          image: ${{ env.BACKEND_TAG }}
+          severity: critical
+
+      - name: 🛡️ Snyk Final Image Scan (frontend)
+        uses: snyk/actions/docker@master
+        env:
+          FRONTEND_TAG: ${{ env.NEXUS_REGISTRY }}/frontend:${{ env.IMAGE_VERSION }}
+        with:
+          image: ${{ env.FRONTEND_TAG }}
           severity: critical
 
       # --- 🚀 PUSH STAGE ---
@@ -111,6 +136,13 @@ jobs:
           docker push $AUTH_TAG
           docker push $BACKEND_TAG
           docker push $FRONTEND_TAG
+          
+          # Best practice: If on main branch, also push :latest tags
+          if [ "${{ github.ref }}" = "refs/heads/main" ]; then
+            docker push ${{ env.NEXUS_REGISTRY }}/auth-service:latest
+            docker push ${{ env.NEXUS_REGISTRY }}/backend:latest
+            docker push ${{ env.NEXUS_REGISTRY }}/frontend:latest
+          fi
 
       # --- ☁️ DEPLOYMENT & CLEANUP ---
       
