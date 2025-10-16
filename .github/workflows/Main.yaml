@@ -41,6 +41,7 @@ jobs:
       - name: ⚙️ Set up Python Environment
         uses: actions/setup-python@v5
         with:
+          # Pinning to a stable version (like 3.12)
           python-version: '3.12' 
 
       - name: 📦 Install Pytest Dependency
@@ -61,11 +62,11 @@ jobs:
           BACKEND_TAG: ${{ env.NEXUS_REGISTRY }}/backend:${{ env.IMAGE_VERSION }}
           FRONTEND_TAG: ${{ env.NEXUS_REGISTRY }}/frontend:${{ env.IMAGE_VERSION }}
           
-          # Define the exact source tags based on the build output for retagging
-          # The images are named using the DOCKERHUB_REGISTRY/PROJECT_NAME-service-name:latest format
-          AUTH_SOURCE_TAG: docker.io/${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-auth-service:latest
-          BACKEND_SOURCE_TAG: docker.io/${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-backend:latest
-          FRONTEND_SOURCE_TAG: docker.io/${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-frontend:latest
+          # FIX: Define the exact source tags without the 'docker.io/' prefix, 
+          # matching the name Docker Compose assigns.
+          AUTH_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-auth-service:latest
+          BACKEND_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-backend:latest
+          FRONTEND_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-frontend:latest
           
         run: |
           cd infra
@@ -77,7 +78,6 @@ jobs:
             auth-service backend frontend 
           
           # 2. Manually tag the local images with the correct Nexus tag.
-          # FIX: Use the exact image name reported by Docker Compose build output as the source.
           docker tag $AUTH_SOURCE_TAG $AUTH_TAG
           docker tag $BACKEND_SOURCE_TAG $BACKEND_TAG
           docker tag $FRONTEND_SOURCE_TAG $FRONTEND_TAG
