@@ -1,28 +1,20 @@
 name: CI/CD Pipeline - Luxe Jewelry Store
 
-# 1. Trigger the workflow on pushes to the main branch OR a new tag
 on:
   push:
     branches:
       - main
     tags:
-      - 'v*' # Trigger on any tag starting with 'v' (e.g., v1.0.0)
+      - 'v*' 
 
-# Define global environment variables
 env:
   DOCKERHUB_REGISTRY: talgold01
-  NEXUS_REGISTRY: localhost:8082/docker-hosted  # CRITICAL: Replace with your actual Nexus URL (e.g., nexus.yourdomain.com:8082/repository/docker-hosted)
+  NEXUS_REGISTRY: localhost:8082/docker-hosted  # CRITICAL: Replace with your actual Nexus URL
   PROJECT_NAME: luxe-jewelry-store-project 
   DEPLOY_ENV: development
-  
-  # VERSION CONTROL LOGIC
   IMAGE_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || github.run_id }} 
 
 jobs:
-  
-  # ====================================================================
-  # STABLE CI/CD PIPELINE JOB
-  # ====================================================================
   ci_cd_pipeline:
     runs-on: ubuntu-latest
     
@@ -30,13 +22,10 @@ jobs:
       - name: ⬇️ Checkout Repository
         uses: actions/checkout@v4
       
-      # 🔑 Set up Snyk Token once for all scans
       - name: 🔑 Set up Snyk
         uses: snyk/actions/setup@master
         with:
           snyk-token: ${{ secrets.SNYK_TOKEN }}
-
-      # --- 🧪 UNIT TESTS STAGE ---
 
       - name: ⚙️ Set up Python Environment
         uses: actions/setup-python@v5
@@ -50,41 +39,32 @@ jobs:
         working-directory: test
         run: pytest --maxfail=1 --disable-warnings -q
 
-      # --- 🏗️ BUILD STAGE ---
-
       - name: 🛠️ Setup Docker Compose
         run: docker compose version
 
       - name: 🏗️ Build and Tag Docker Images for Nexus
         env:
-          AUTH_TAG: ${{ env.NEXUS_REGISTRY }}/auth-service:${{ env.IMAGE_VERSION }}
-          BACKEND_TAG: ${{ env.NEXUS_REGISTRY }}/backend:${{ env.IMAGE_VERSION }}
-          FRONTEND_TAG: ${{ env.NEXUS_REGISTRY }}/frontend:${{ env.IMAGE_VERSION }}
-          
-          # Local source tags from docker-compose build
           AUTH_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-auth-service-latest
           BACKEND_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-backend-latest
           FRONTEND_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-frontend-latest
-          
+          AUTH_TAG: ${{ env.NEXUS_REGISTRY }}/auth-service:${{ env.IMAGE_VERSION }}
+          BACKEND_TAG: ${{ env.NEXUS_REGISTRY }}/backend:${{ env.IMAGE_VERSION }}
+          FRONTEND_TAG: ${{ env.NEXUS_REGISTRY }}/frontend:${{ env.IMAGE_VERSION }}
         run: |
           cd infra
           echo "Starting Docker builds with tag: ${{ env.IMAGE_VERSION }}"
           
-          # 1. Build images
           docker compose build \
             --build-arg IMAGE_VERSION=${{ env.IMAGE_VERSION }} \
             auth-service backend frontend 
           
-          # Debug: List built images
           echo "=== BUILT IMAGES ==="
           docker images | grep ${{ env.PROJECT_NAME }} || true
           
-          # 2. Tag for Nexus
           docker tag $AUTH_SOURCE_TAG $AUTH_TAG
           docker tag $BACKEND_SOURCE_TAG $BACKEND_TAG
           docker tag $FRONTEND_SOURCE_TAG $FRONTEND_TAG
           
-          # 3. Tag :latest for main branch pushes
           if [ "${{ github.ref }}" = "refs/heads/main" ]; then
             docker tag $AUTH_SOURCE_TAG ${{ env.NEXUS_REGISTRY }}/auth-service:latest
             docker tag $BACKEND_SOURCE_TAG ${{ env.NEXUS_REGISTRY }}/backend:latest
@@ -93,8 +73,6 @@ jobs:
           
           echo "All images built and tagged successfully."
 
-      # --- 🐳 SECURITY SCAN STAGE (FIXED) ---
-      
       - name: 🛡️ Debug: Verify Images Exist Before Snyk Scan
         env:
           AUTH_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-auth-service-latest
@@ -110,32 +88,24 @@ jobs:
 
       - name: 🛡️ Snyk Container Scan - Auth Service
         uses: snyk/actions/docker@master
-        env:
-          AUTH_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-auth-service-latest
         with:
-          image: ${{ env.AUTH_SOURCE_TAG }}
+          image: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-auth-service-latest
           args: --severity-threshold=critical --json
-        continue-on-error: true  # Temporarily allow failures while debugging
+        continue-on-error: true
 
       - name: 🛡️ Snyk Container Scan - Backend
         uses: snyk/actions/docker@master
-        env:
-          BACKEND_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-backend-latest
         with:
-          image: ${{ env.BACKEND_SOURCE_TAG }}
+          image: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-backend-latest
           args: --severity-threshold=critical --json
         continue-on-error: true
 
       - name: 🛡️ Snyk Container Scan - Frontend
         uses: snyk/actions/docker@master
-        env:
-          FRONTEND_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-frontend-latest
         with:
-          image: ${{ env.FRONTEND_SOURCE_TAG }}
+          image: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-frontend-latest
           args: --severity-threshold=critical --json
         continue-on-error: true
-
-      # --- 🚀 PUSH STAGE ---
 
       - name: 🔑 Log in to Nexus Repository
         run: |
@@ -153,15 +123,12 @@ jobs:
           docker push $BACKEND_TAG
           docker push $FRONTEND_TAG
           
-          # Push :latest tags only on main branch
           if [ "${{ github.ref }}" = "refs/heads/main" ]; then
             docker push ${{ env.NEXUS_REGISTRY }}/auth-service:latest
             docker push ${{ env.NEXUS_REGISTRY }}/backend:latest
             docker push ${{ env.NEXUS_REGISTRY }}/frontend:latest
           fi
 
-      # --- ☁️ DEPLOYMENT & CLEANUP ---
-      
       - name: ☁️ Deploy Services
         run: |
           echo "Deployment to ${{ env.DEPLOY_ENV }} using images tagged with version: ${{ env.IMAGE_VERSION }}"
