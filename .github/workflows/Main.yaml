@@ -41,7 +41,8 @@ jobs:
       # --- BUILD STAGE (using Nexus versioning) ---
 
       - name: 🛠️ Setup Docker Compose
-        run: docker-compose version
+        # FIX: Updated to modern 'docker compose' command
+        run: docker compose version
 
       - name: 🏗️ Build and Tag Docker Images for Nexus
         # Define the full, versioned tags as variables for use in the 'run' block
@@ -52,8 +53,8 @@ jobs:
           AGENT_TAG: ${{ env.NEXUS_REGISTRY }}/jenkins-agent:${{ env.IMAGE_VERSION }}
         run: |
           cd infra
-          # Build images
-          docker-compose build \
+          # FIX: Updated to modern 'docker compose' command
+          docker compose build \
             --build-arg IMAGE_VERSION=${{ env.IMAGE_VERSION }} \
             auth-service backend frontend jenkins-agent
           
