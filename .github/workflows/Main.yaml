@@ -30,6 +30,17 @@ jobs:
       - name: ⬇️ Checkout Repository
         uses: actions/checkout@v4
       
+      # --- FIX: SETUP PYTHON ENVIRONMENT AND INSTALL PACKAGES ---
+      - name: ⚙️ Set up Python Environment for Backend Scan
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: 📦 Install Backend Dependencies (For Snyk Scan)
+        # This installs the packages Snyk needs to analyze the project environment.
+        run: pip install -r backend/requirements.txt
+      # --------------------------------------------------------
+
       # 🔑 Set up Snyk Token
       - name: 🔑 Set up Snyk
         uses: snyk/actions/setup@master
@@ -42,13 +53,13 @@ jobs:
         with:
           command: code
           
-      # FIX: Use the snyk/actions/python@master sub-action for Python dependencies
       - name: 🐍 Snyk Open Source Scan (Backend Dependencies)
-        uses: snyk/actions/python@master # <-- FIXED
+        # This now uses the pre-installed packages in the runner environment.
+        uses: snyk/actions/python@master 
         with:
           args: --file=backend/requirements.txt --severity=high
 
-      # Frontend Scan (uses snyk/actions@master which often defaults to node env, should be okay)
+      # Frontend Scan (Note: You may need a similar 'npm install' step if Snyk fails here)
       - name: 🌐 Snyk Open Source Scan (Frontend Dependencies)
         uses: snyk/actions@master 
         with:
@@ -73,7 +84,7 @@ jobs:
       - name: ⬇️ Checkout Repository
         uses: actions/checkout@v4
 
-      # --- UNIT TESTS STAGE ---
+      # --- UNIT TESTS STAGE (Uses a separate Python setup from the scan job) ---
 
       - name: ⚙️ Set up Python Environment
         uses: actions/setup-python@v5
@@ -81,7 +92,7 @@ jobs:
           python-version: '3.x'
 
       - name: 📦 Install Python Dependencies
-        run: pip install pytest
+        run: pip install pytest # Only installs pytest for the test runner here
 
       - name: 🧪 Run Unit Tests
         working-directory: test
