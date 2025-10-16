@@ -30,16 +30,15 @@ jobs:
       - name: ⬇️ Checkout Repository
         uses: actions/checkout@v4
       
-      # --- FIX: SETUP PYTHON ENVIRONMENT AND INSTALL PACKAGES ---
+      # --- FIX 1: PIN PYTHON VERSION TO A STABLE RELEASE (e.g., 3.12) ---
       - name: ⚙️ Set up Python Environment for Backend Scan
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.12' # CHANGED from '3.x' to '3.12'
 
       - name: 📦 Install Backend Dependencies (For Snyk Scan)
-        # This installs the packages Snyk needs to analyze the project environment.
         run: pip install -r backend/requirements.txt
-      # --------------------------------------------------------
+      # ------------------------------------------------------------------
 
       # 🔑 Set up Snyk Token
       - name: 🔑 Set up Snyk
@@ -47,19 +46,18 @@ jobs:
         with:
           snyk-token: ${{ secrets.SNYK_TOKEN }}
 
-      # Snyk Code Scan (no dependencies required)
+      # Snyk Code Scan
       - name: 🛡️ Snyk Code Scan (Source Code)
         uses: snyk/actions@master 
         with:
           command: code
           
       - name: 🐍 Snyk Open Source Scan (Backend Dependencies)
-        # This now uses the pre-installed packages in the runner environment.
         uses: snyk/actions/python@master 
         with:
           args: --file=backend/requirements.txt --severity=high
 
-      # Frontend Scan (Note: You may need a similar 'npm install' step if Snyk fails here)
+      # Frontend Scan
       - name: 🌐 Snyk Open Source Scan (Frontend Dependencies)
         uses: snyk/actions@master 
         with:
@@ -84,19 +82,21 @@ jobs:
       - name: ⬇️ Checkout Repository
         uses: actions/checkout@v4
 
-      # --- UNIT TESTS STAGE (Uses a separate Python setup from the scan job) ---
+      # --- UNIT TESTS STAGE ---
 
+      # --- FIX 2: PIN PYTHON VERSION FOR UNIT TESTS ---
       - name: ⚙️ Set up Python Environment
         uses: actions/setup-python@v5
         with:
-          python-version: '3.x'
+          python-version: '3.12' # CHANGED from '3.x' to '3.12'
 
       - name: 📦 Install Python Dependencies
-        run: pip install pytest # Only installs pytest for the test runner here
+        run: pip install pytest 
 
       - name: 🧪 Run Unit Tests
         working-directory: test
         run: pytest --maxfail=1 --disable-warnings -q
+      # -----------------------------------------------
 
       # --- BUILD STAGE (using Version Control) ---
 
