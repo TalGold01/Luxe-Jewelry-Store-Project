@@ -1,19 +1,24 @@
 name: CI/CD Pipeline - Luxe Jewelry Store
 
-# 1. Trigger the workflow on pushes to the main branch
+# 1. Trigger the workflow on pushes to the main branch OR a new tag
 on:
   push:
     branches:
       - main
+    tags:
+      - 'v*' # Trigger on any tag starting with 'v' (e.g., v1.0.0)
 
 # Define global environment variables
 env:
   DOCKERHUB_REGISTRY: talgold01
-  NEXUS_REGISTRY: localhost:8082/docker-hosted  # Use your public IP/DNS if running remotely
+  NEXUS_REGISTRY: localhost:8082/docker-hosted
   PROJECT_NAME: luxe-jewelry-store-project
   DEPLOY_ENV: development
-  # Use GitHub's built-in run ID for versioning the image tag
-  IMAGE_VERSION: ${{ github.run_id }} 
+  
+  # VERSION CONTROL LOGIC: 
+  # If triggered by a tag (refs/tags/vX.Y.Z), use the tag name (e.g., v1.0.0).
+  # Otherwise (e.g., push to main), use the unique run ID.
+  IMAGE_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || github.run_id }} 
 
 jobs:
   # The entire pipeline runs on a single runner
@@ -24,7 +29,7 @@ jobs:
       - name: ⬇️ Checkout Repository
         uses: actions/checkout@v4
 
-      # --- INSTRUCTOR REQUIREMENT: UNIT TESTS BEFORE BUILD ---
+      # --- UNIT TESTS STAGE ---
 
       - name: ⚙️ Set up Python Environment
         uses: actions/setup-python@v5
@@ -35,45 +40,43 @@ jobs:
         run: pip install pytest
 
       - name: 🧪 Run Unit Tests
-        working-directory: test # Navigate to the 'test' directory
+        working-directory: test
         run: pytest --maxfail=1 --disable-warnings -q
 
-      # --- BUILD STAGE (using Nexus versioning) ---
+      # --- BUILD STAGE (using Version Control) ---
 
       - name: 🛠️ Setup Docker Compose
-        # FIX: Updated to modern 'docker compose' command
         run: docker compose version
 
       - name: 🏗️ Build and Tag Docker Images for Nexus
-        # Define the full, versioned tags as variables for use in the 'run' block
+        # Define the full, versioned tags as variables
         env:
           AUTH_TAG: ${{ env.NEXUS_REGISTRY }}/auth-service:${{ env.IMAGE_VERSION }}
           BACKEND_TAG: ${{ env.NEXUS_REGISTRY }}/backend:${{ env.IMAGE_VERSION }}
           FRONTEND_TAG: ${{ env.NEXUS_REGISTRY }}/frontend:${{ env.IMAGE_VERSION }}
-          AGENT_TAG: ${{ env.NEXUS_REGISTRY }}/jenkins-agent:${{ env.IMAGE_VERSION }}
+          # AGENT_TAG: ${{ env.NEXUS_REGISTRY }}/jenkins-agent:${{ env.IMAGE_VERSION }} # REMOVED for build fix
         run: |
           cd infra
-          # FIX: Updated to modern 'docker compose' command
+          # FIX: Removed 'jenkins-agent' to resolve the 'no such service' error
           docker compose build \
             --build-arg IMAGE_VERSION=${{ env.IMAGE_VERSION }} \
-            auth-service backend frontend jenkins-agent
+            auth-service backend frontend 
           
           # Manually tag local built images with the Nexus URL and version
           docker tag luxe-jewelry-store-project_auth-service $AUTH_TAG
           docker tag luxe-jewelry-store-project_backend $BACKEND_TAG
           docker tag luxe-jewelry-store-project_frontend $FRONTEND_TAG
-          docker tag luxe-jewelry-store-project_jenkins-agent $AGENT_TAG
+          # docker tag luxe-jewelry-store-project_jenkins-agent $AGENT_TAG # REMOVED for build fix
 
       # --- SECURITY SCAN STAGE ---
       
       - name: 🛡️ Snyk Security Scan
-        # Define the single tag needed for the scan here
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
           AUTH_TAG: ${{ env.NEXUS_REGISTRY }}/auth-service:${{ env.IMAGE_VERSION }}
         uses: snyk/actions/docker@master
         with:
-          image: ${{ env.AUTH_TAG }} # Use the correctly defined tag
+          image: ${{ env.AUTH_TAG }}
           severity: critical
 
       # --- PUSH STAGE (Only to Nexus) ---
@@ -90,19 +93,18 @@ jobs:
           AUTH_TAG: ${{ env.NEXUS_REGISTRY }}/auth-service:${{ env.IMAGE_VERSION }}
           BACKEND_TAG: ${{ env.NEXUS_REGISTRY }}/backend:${{ env.IMAGE_VERSION }}
           FRONTEND_TAG: ${{ env.NEXUS_REGISTRY }}/frontend:${{ env.IMAGE_VERSION }}
-          AGENT_TAG: ${{ env.NEXUS_REGISTRY }}/jenkins-agent:${{ env.IMAGE_VERSION }}
+          # AGENT_TAG: ${{ env.NEXUS_REGISTRY }}/jenkins-agent:${{ env.IMAGE_VERSION }} # REMOVED for build fix
         run: |
           docker push $AUTH_TAG
           docker push $BACKEND_TAG
           docker push $FRONTEND_TAG
-          docker push $AGENT_TAG
+          # docker push $AGENT_TAG # REMOVED for build fix
 
       # --- DEPLOYMENT STAGE ---
       
       - name: ☁️ Deploy Services (Placeholder for Remote Deploy)
         run: |
           echo "Deployment to ${{ env.DEPLOY_ENV }} initiated using images tagged with version: ${{ env.IMAGE_VERSION }}"
-          # In a remote environment, replace this with SSH and deployment commands.
 
       # --- POST: CLEANUP ---
 
