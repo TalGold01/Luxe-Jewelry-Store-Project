@@ -30,7 +30,7 @@ jobs:
       - name: ⬇️ Checkout Repository
         uses: actions/checkout@v4
       
-      # 🔑 Set up Snyk Token once for all scans (Moved up here)
+      # 🔑 Set up Snyk Token once for all scans
       - name: 🔑 Set up Snyk
         uses: snyk/actions/setup@master
         with:
@@ -41,7 +41,6 @@ jobs:
       - name: ⚙️ Set up Python Environment
         uses: actions/setup-python@v5
         with:
-          # Pinning to a stable version (like 3.12)
           python-version: '3.12' 
 
       - name: 📦 Install Pytest Dependency
@@ -51,7 +50,7 @@ jobs:
         working-directory: test
         run: pytest --maxfail=1 --disable-warnings -q
 
-      # --- 🏗️ BUILD STAGE (The fixed tagging logic is preserved) ---
+      # --- 🏗️ BUILD STAGE (FIXED TAGGING SOURCE) ---
 
       - name: 🛠️ Setup Docker Compose
         run: docker compose version
@@ -61,23 +60,31 @@ jobs:
           AUTH_TAG: ${{ env.NEXUS_REGISTRY }}/auth-service:${{ env.IMAGE_VERSION }}
           BACKEND_TAG: ${{ env.NEXUS_REGISTRY }}/backend:${{ env.IMAGE_VERSION }}
           FRONTEND_TAG: ${{ env.NEXUS_REGISTRY }}/frontend:${{ env.IMAGE_VERSION }}
+          
+          # Define the exact source tags based on the build output for retagging
+          # The images are named using the DOCKERHUB_REGISTRY/PROJECT_NAME-service-name:latest format
+          AUTH_SOURCE_TAG: docker.io/${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-auth-service:latest
+          BACKEND_SOURCE_TAG: docker.io/${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-backend:latest
+          FRONTEND_SOURCE_TAG: docker.io/${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-frontend:latest
+          
         run: |
           cd infra
           echo "Starting Docker builds with tag: ${{ env.IMAGE_VERSION }}"
           
-          # 1. Build images.
+          # 1. Build images. These create the source images defined above.
           docker compose build \
             --build-arg IMAGE_VERSION=${{ env.IMAGE_VERSION }} \
             auth-service backend frontend 
           
-          # 2. Manually tag the local images with the correct Nexus tag. (FIXED LOGIC)
-          docker tag ${{ env.PROJECT_NAME }}_auth-service $AUTH_TAG
-          docker tag ${{ env.PROJECT_NAME }}_backend $BACKEND_TAG
-          docker tag ${{ env.PROJECT_NAME }}_frontend $FRONTEND_TAG
+          # 2. Manually tag the local images with the correct Nexus tag.
+          # FIX: Use the exact image name reported by Docker Compose build output as the source.
+          docker tag $AUTH_SOURCE_TAG $AUTH_TAG
+          docker tag $BACKEND_SOURCE_TAG $BACKEND_TAG
+          docker tag $FRONTEND_SOURCE_TAG $FRONTEND_TAG
           
           echo "All images successfully built and tagged for Nexus."
 
-      # --- 🐳 SECURITY SCAN STAGE (Post-Build/Image-Based - The original single scan) ---
+      # --- 🐳 SECURITY SCAN STAGE (Post-Build/Image-Based) ---
 
       - name: 🛡️ Snyk Final Image Scan (auth-service)
         uses: snyk/actions/docker@master
@@ -85,7 +92,7 @@ jobs:
           AUTH_TAG: ${{ env.NEXUS_REGISTRY }}/auth-service:${{ env.IMAGE_VERSION }}
         with:
           image: ${{ env.AUTH_TAG }}
-          severity: critical # Only scans the final built image
+          severity: critical
 
       # --- 🚀 PUSH STAGE ---
 
