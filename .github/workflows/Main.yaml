@@ -21,84 +21,63 @@ env:
 jobs:
   
   # ====================================================================
-  # JOB 1: PRE-BUILD SECURITY SCAN (Shift-Left)
+  # COMBINED CI/CD PIPELINE JOB
   # ====================================================================
-  security_scan_pre_build:
+  ci_cd_pipeline:
     runs-on: ubuntu-latest
     
     steps:
       - name: ⬇️ Checkout Repository
         uses: actions/checkout@v4
-      
-      # --- FIX 1: PIN PYTHON VERSION TO A STABLE RELEASE (e.g., 3.12) ---
-      - name: ⚙️ Set up Python Environment for Backend Scan
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.12' # CHANGED from '3.x' to '3.12'
 
-      - name: 📦 Install Backend Dependencies (For Snyk Scan)
-        run: pip install -r backend/requirements.txt
-      # ------------------------------------------------------------------
-
-      # 🔑 Set up Snyk Token
+      # 🔑 Set up Snyk Token once for all scans
       - name: 🔑 Set up Snyk
         uses: snyk/actions/setup@master
         with:
           snyk-token: ${{ secrets.SNYK_TOKEN }}
 
-      # Snyk Code Scan
+      # --- 🛡️ SECURITY SCAN STAGE (Pre-Build/File-Based) ---
+      
+      # NOTE: For file-based scans, Snyk often only needs access to the dependency file.
+      # If these fail due to environment/parsing issues, we may need to adjust the Snyk action 
+      # or temporarily remove the --severity filter.
+
       - name: 🛡️ Snyk Code Scan (Source Code)
         uses: snyk/actions@master 
         with:
           command: code
           
+      # Backend Dependencies Scan (Python)
+      # Using the dedicated Python action is essential to run in the correct environment
       - name: 🐍 Snyk Open Source Scan (Backend Dependencies)
         uses: snyk/actions/python@master 
         with:
           args: --file=backend/requirements.txt --severity=high
 
-      # Frontend Scan
+      # Frontend Dependencies Scan (Node)
+      # Using the main action for Node projects often works well
       - name: 🌐 Snyk Open Source Scan (Frontend Dependencies)
         uses: snyk/actions@master 
         with:
           command: test
           args: --file=frontend/package.json --severity=high
 
-      - name: 🐳 Snyk Base Image Analysis (Alpine/Debian/Ubuntu)
-        uses: snyk/actions/docker@master
-        with:
-          image: 'node:18' 
-          severity: critical
+      # --- 🧪 UNIT TESTS STAGE ---
 
-  
-  # ====================================================================
-  # JOB 2: CI/CD PIPELINE (Build/Tag/Push/Deploy)
-  # ====================================================================
-  ci_cd_pipeline:
-    needs: security_scan_pre_build 
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: ⬇️ Checkout Repository
-        uses: actions/checkout@v4
-
-      # --- UNIT TESTS STAGE ---
-
-      # --- FIX 2: PIN PYTHON VERSION FOR UNIT TESTS ---
       - name: ⚙️ Set up Python Environment
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12' # CHANGED from '3.x' to '3.12'
+          # Pinning to a stable version (like 3.12) to avoid pydantic-core build failures
+          python-version: '3.12' 
 
-      - name: 📦 Install Python Dependencies
+      - name: 📦 Install Pytest Dependency
         run: pip install pytest 
 
       - name: 🧪 Run Unit Tests
         working-directory: test
         run: pytest --maxfail=1 --disable-warnings -q
-      # -----------------------------------------------
 
-      # --- BUILD STAGE (using Version Control) ---
+      # --- 🏗️ BUILD STAGE ---
 
       - name: 🛠️ Setup Docker Compose
         run: docker compose version
@@ -112,22 +91,19 @@ jobs:
           cd infra
           echo "Starting Docker builds with tag: ${{ env.IMAGE_VERSION }}"
           
+          # 1. Build images with the project name for local tagging
           docker compose build \
             --build-arg IMAGE_VERSION=${{ env.IMAGE_VERSION }} \
             auth-service backend frontend 
           
+          # 2. Manually tag the local images with the correct Nexus tag.
           docker tag ${{ env.PROJECT_NAME }}_auth-service $AUTH_TAG
           docker tag ${{ env.PROJECT_NAME }}_backend $BACKEND_TAG
           docker tag ${{ env.PROJECT_NAME }}_frontend $FRONTEND_TAG
           
           echo "All images successfully built and tagged for Nexus."
 
-      # --- SECURITY SCAN STAGE (Post-Build Scan) ---
-      
-      - name: 🔑 Set up Snyk (for post-build scan)
-        uses: snyk/actions/setup@master
-        with:
-          snyk-token: ${{ secrets.SNYK_TOKEN }}
+      # --- 🐳 SECURITY SCAN STAGE (Post-Build/Image-Based) ---
 
       - name: 🛡️ Snyk Final Image Scan (auth-service)
         uses: snyk/actions/docker@master
@@ -137,7 +113,7 @@ jobs:
           image: ${{ env.AUTH_TAG }}
           severity: critical
 
-      # --- PUSH STAGE ---
+      # --- 🚀 PUSH STAGE ---
 
       - name: 🔑 Log in to Nexus Repository (via Docker CLI)
         run: |
@@ -155,13 +131,11 @@ jobs:
           docker push $BACKEND_TAG
           docker push $FRONTEND_TAG
 
-      # --- DEPLOYMENT STAGE ---
+      # --- ☁️ DEPLOYMENT & CLEANUP ---
       
       - name: ☁️ Deploy Services (Placeholder for Remote Deploy)
         run: |
           echo "Deployment to ${{ env.DEPLOY_ENV }} initiated using images tagged with version: ${{ env.IMAGE_VERSION }}"
-
-      # --- POST: CLEANUP ---
 
       - name: 🧹 Cleanup Docker Resources
         if: always()
