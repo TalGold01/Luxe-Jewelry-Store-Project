@@ -46,6 +46,7 @@ jobs:
       # --- BUILD STAGE (using Version Control) ---
 
       - name: 🛠️ Setup Docker Compose
+        # FIX: Ensure we use the modern 'docker compose' command
         run: docker compose version
 
       - name: 🏗️ Build and Tag Docker Images for Nexus
@@ -54,19 +55,29 @@ jobs:
           AUTH_TAG: ${{ env.NEXUS_REGISTRY }}/auth-service:${{ env.IMAGE_VERSION }}
           BACKEND_TAG: ${{ env.NEXUS_REGISTRY }}/backend:${{ env.IMAGE_VERSION }}
           FRONTEND_TAG: ${{ env.NEXUS_REGISTRY }}/frontend:${{ env.IMAGE_VERSION }}
-          # AGENT_TAG: ${{ env.NEXUS_REGISTRY }}/jenkins-agent:${{ env.IMAGE_VERSION }} # REMOVED for build fix
         run: |
           cd infra
-          # FIX: Removed 'jenkins-agent' to resolve the 'no such service' error
-          docker compose build \
-            --build-arg IMAGE_VERSION=${{ env.IMAGE_VERSION }} \
-            auth-service backend frontend 
+          echo "Starting Docker builds with tag: ${{ env.IMAGE_VERSION }}"
           
-          # Manually tag local built images with the Nexus URL and version
-          docker tag luxe-jewelry-store-project_auth-service $AUTH_TAG
-          docker tag luxe-jewelry-store-project_backend $BACKEND_TAG
-          docker tag luxe-jewelry-store-project_frontend $FRONTEND_TAG
-          # docker tag luxe-jewelry-store-project_jenkins-agent $AGENT_TAG # REMOVED for build fix
+          # FIX: Build services individually and use --tag to correctly name the image 
+          # for the Nexus registry. This eliminates the "No such image" error.
+          
+          # Build and tag auth-service directly
+          docker compose build auth-service \
+            --build-arg IMAGE_VERSION=${{ env.IMAGE_VERSION }} \
+            --tag $AUTH_TAG
+          
+          # Build and tag backend directly
+          docker compose build backend \
+            --build-arg IMAGE_VERSION=${{ env.IMAGE_VERSION }} \
+            --tag $BACKEND_TAG
+
+          # Build and tag frontend directly
+          docker compose build frontend \
+            --build-arg IMAGE_VERSION=${{ env.IMAGE_VERSION }} \
+            --tag $FRONTEND_TAG
+          
+          echo "All images successfully built and tagged for Nexus."
 
       # --- SECURITY SCAN STAGE ---
       
@@ -93,12 +104,10 @@ jobs:
           AUTH_TAG: ${{ env.NEXUS_REGISTRY }}/auth-service:${{ env.IMAGE_VERSION }}
           BACKEND_TAG: ${{ env.NEXUS_REGISTRY }}/backend:${{ env.IMAGE_VERSION }}
           FRONTEND_TAG: ${{ env.NEXUS_REGISTRY }}/frontend:${{ env.IMAGE_VERSION }}
-          # AGENT_TAG: ${{ env.NEXUS_REGISTRY }}/jenkins-agent:${{ env.IMAGE_VERSION }} # REMOVED for build fix
         run: |
           docker push $AUTH_TAG
           docker push $BACKEND_TAG
           docker push $FRONTEND_TAG
-          # docker push $AGENT_TAG # REMOVED for build fix
 
       # --- DEPLOYMENT STAGE ---
       
