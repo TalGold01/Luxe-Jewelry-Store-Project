@@ -73,7 +73,7 @@ jobs:
           
           echo "All images built and tagged successfully."
 
-      - name: 🛡️ Debug: Verify Images Exist Before Snyk Scan
+      - name:Debug: Verify Images Exist Before Snyk Scan
         run: |
           echo "Checking if local images exist:"
           docker image inspect talgold01/luxe-jewelry-store-project-auth-service-latest >/dev/null 2>&1 && echo "✅ AUTH image found" || echo "❌ AUTH image not found"
