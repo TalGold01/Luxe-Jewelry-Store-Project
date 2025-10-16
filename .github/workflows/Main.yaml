@@ -12,17 +12,67 @@ on:
 env:
   DOCKERHUB_REGISTRY: talgold01
   NEXUS_REGISTRY: localhost:8082/docker-hosted
-  PROJECT_NAME: luxe-jewelry-store-project
+  PROJECT_NAME: luxe-jewelry-store-project 
   DEPLOY_ENV: development
   
-  # VERSION CONTROL LOGIC: 
-  # If triggered by a tag (refs/tags/vX.Y.Z), use the tag name (e.g., v1.0.0).
-  # Otherwise (e.g., push to main), use the unique run ID.
+  # VERSION CONTROL LOGIC
   IMAGE_VERSION: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || github.run_id }} 
 
 jobs:
-  # The entire pipeline runs on a single runner
+  
+  # ====================================================================
+  # NEW JOB 1: PRE-BUILD SECURITY SCAN (Shift-Left)
+  # This job must pass before the build and deploy pipeline starts.
+  # ====================================================================
+  security_scan_pre_build:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: ⬇️ Checkout Repository
+        uses: actions/checkout@v4
+      
+      # 🔑 Set up Snyk Token
+      - name: 🔑 Set up Snyk
+        uses: snyk/actions/setup@master
+        with:
+          # Ensure you have SNYK_TOKEN defined as a GitHub secret!
+          snyk-token: ${{ secrets.SNYK_TOKEN }}
+
+      - name: 🛡️ Snyk Code Scan (Source Code)
+        # Scan the entire project source code for vulnerabilities (if applicable)
+        # Note: This requires Snyk Code to be enabled for your token/account
+        uses: snyk/actions/code@master
+        
+      - name: 🐍 Snyk Open Source Scan (Backend Dependencies)
+        # Scan the requirements.txt or equivalent file for Python vulnerabilities
+        # Assumes your main requirements file is in the 'backend' folder
+        uses: snyk/actions/maven@master # Using a generic action for file scanning
+        with:
+          command: test
+          args: --file=backend/requirements.txt --severity=high
+
+      - name: 🌐 Snyk Open Source Scan (Frontend Dependencies)
+        # Scan the package.json file for Node/JS vulnerabilities
+        uses: snyk/actions/npm@master
+        with:
+          command: test
+          args: --file=frontend/package.json --severity=high
+
+      - name: 🐳 Snyk Base Image Analysis (Alpine/Debian/Ubuntu)
+        # Scan a common base image used across your project (e.g., node:18 base for frontend)
+        uses: snyk/actions/docker@master
+        with:
+          image: 'node:18' 
+          severity: critical
+
+  
+  # ====================================================================
+  # JOB 2: CI/CD PIPELINE (Build/Tag/Push/Deploy)
+  # This job will only run if security_scan_pre_build succeeds.
+  # ====================================================================
   ci_cd_pipeline:
+    # Requires the security scan job to complete successfully
+    needs: security_scan_pre_build 
     runs-on: ubuntu-latest
     
     steps:
@@ -46,7 +96,6 @@ jobs:
       # --- BUILD STAGE (using Version Control) ---
 
       - name: 🛠️ Setup Docker Compose
-        # FIX: Ensure we use the modern 'docker compose' command
         run: docker compose version
 
       - name: 🏗️ Build and Tag Docker Images for Nexus
@@ -59,38 +108,35 @@ jobs:
           cd infra
           echo "Starting Docker builds with tag: ${{ env.IMAGE_VERSION }}"
           
-          # FIX: Build services individually and use --tag to correctly name the image 
-          # for the Nexus registry. This eliminates the "No such image" error.
+          # 1. Build images. They are temporarily named using the PROJECT_NAME variable.
+          docker compose build \
+            --build-arg IMAGE_VERSION=${{ env.IMAGE_VERSION }} \
+            auth-service backend frontend 
           
-          # Build and tag auth-service directly
-          docker compose build auth-service \
-            --build-arg IMAGE_VERSION=${{ env.IMAGE_VERSION }} \
-            --tag $AUTH_TAG
-          
-          # Build and tag backend directly
-          docker compose build backend \
-            --build-arg IMAGE_VERSION=${{ env.IMAGE_VERSION }} \
-            --tag $BACKEND_TAG
-
-          # Build and tag frontend directly
-          docker compose build frontend \
-            --build-arg IMAGE_VERSION=${{ env.IMAGE_VERSION }} \
-            --tag $FRONTEND_TAG
+          # 2. Manually tag the locally created images with the correct Nexus tag.
+          docker tag ${{ env.PROJECT_NAME }}_auth-service $AUTH_TAG
+          docker tag ${{ env.PROJECT_NAME }}_backend $BACKEND_TAG
+          docker tag ${{ env.PROJECT_NAME }}_frontend $FRONTEND_TAG
           
           echo "All images successfully built and tagged for Nexus."
 
-      # --- SECURITY SCAN STAGE ---
+      # --- SECURITY SCAN STAGE (Post-Build Scan) ---
       
-      - name: 🛡️ Snyk Security Scan
-        env:
-          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
-          AUTH_TAG: ${{ env.NEXUS_REGISTRY }}/auth-service:${{ env.IMAGE_VERSION }}
+      - name: 🔑 Set up Snyk (for post-build scan)
+        uses: snyk/actions/setup@master
+        with:
+          snyk-token: ${{ secrets.SNYK_TOKEN }}
+
+      - name: 🛡️ Snyk Final Image Scan (auth-service)
+        # This scans the final, layered image for deep OS/package issues
         uses: snyk/actions/docker@master
+        env:
+          AUTH_TAG: ${{ env.NEXUS_REGISTRY }}/auth-service:${{ env.IMAGE_VERSION }}
         with:
           image: ${{ env.AUTH_TAG }}
           severity: critical
 
-      # --- PUSH STAGE (Only to Nexus) ---
+      # --- PUSH STAGE ---
 
       - name: 🔑 Log in to Nexus Repository (via Docker CLI)
         run: |
@@ -99,7 +145,6 @@ jobs:
           --password-stdin
       
       - name: 🚀 Push Images to Nexus (Version Control Implemented)
-        # Define the full tags again for the push commands
         env:
           AUTH_TAG: ${{ env.NEXUS_REGISTRY }}/auth-service:${{ env.IMAGE_VERSION }}
           BACKEND_TAG: ${{ env.NEXUS_REGISTRY }}/backend:${{ env.IMAGE_VERSION }}
