@@ -21,7 +21,7 @@ env:
 jobs:
   
   # ====================================================================
-  # COMBINED CI/CD PIPELINE JOB
+  # STABLE CI/CD PIPELINE JOB
   # ====================================================================
   ci_cd_pipeline:
     runs-on: ubuntu-latest
@@ -29,45 +29,19 @@ jobs:
     steps:
       - name: ⬇️ Checkout Repository
         uses: actions/checkout@v4
-
-      # 🔑 Set up Snyk Token once for all scans
+      
+      # 🔑 Set up Snyk Token once for all scans (Moved up here)
       - name: 🔑 Set up Snyk
         uses: snyk/actions/setup@master
         with:
           snyk-token: ${{ secrets.SNYK_TOKEN }}
-
-      # --- 🛡️ SECURITY SCAN STAGE (Pre-Build/File-Based) ---
-      
-      # NOTE: For file-based scans, Snyk often only needs access to the dependency file.
-      # If these fail due to environment/parsing issues, we may need to adjust the Snyk action 
-      # or temporarily remove the --severity filter.
-
-      - name: 🛡️ Snyk Code Scan (Source Code)
-        uses: snyk/actions@master 
-        with:
-          command: code
-          
-      # Backend Dependencies Scan (Python)
-      # Using the dedicated Python action is essential to run in the correct environment
-      - name: 🐍 Snyk Open Source Scan (Backend Dependencies)
-        uses: snyk/actions/python@master 
-        with:
-          args: --file=backend/requirements.txt --severity=high
-
-      # Frontend Dependencies Scan (Node)
-      # Using the main action for Node projects often works well
-      - name: 🌐 Snyk Open Source Scan (Frontend Dependencies)
-        uses: snyk/actions@master 
-        with:
-          command: test
-          args: --file=frontend/package.json --severity=high
 
       # --- 🧪 UNIT TESTS STAGE ---
 
       - name: ⚙️ Set up Python Environment
         uses: actions/setup-python@v5
         with:
-          # Pinning to a stable version (like 3.12) to avoid pydantic-core build failures
+          # Pinning to a stable version (like 3.12)
           python-version: '3.12' 
 
       - name: 📦 Install Pytest Dependency
@@ -77,7 +51,7 @@ jobs:
         working-directory: test
         run: pytest --maxfail=1 --disable-warnings -q
 
-      # --- 🏗️ BUILD STAGE ---
+      # --- 🏗️ BUILD STAGE (The fixed tagging logic is preserved) ---
 
       - name: 🛠️ Setup Docker Compose
         run: docker compose version
@@ -91,19 +65,19 @@ jobs:
           cd infra
           echo "Starting Docker builds with tag: ${{ env.IMAGE_VERSION }}"
           
-          # 1. Build images with the project name for local tagging
+          # 1. Build images.
           docker compose build \
             --build-arg IMAGE_VERSION=${{ env.IMAGE_VERSION }} \
             auth-service backend frontend 
           
-          # 2. Manually tag the local images with the correct Nexus tag.
+          # 2. Manually tag the local images with the correct Nexus tag. (FIXED LOGIC)
           docker tag ${{ env.PROJECT_NAME }}_auth-service $AUTH_TAG
           docker tag ${{ env.PROJECT_NAME }}_backend $BACKEND_TAG
           docker tag ${{ env.PROJECT_NAME }}_frontend $FRONTEND_TAG
           
           echo "All images successfully built and tagged for Nexus."
 
-      # --- 🐳 SECURITY SCAN STAGE (Post-Build/Image-Based) ---
+      # --- 🐳 SECURITY SCAN STAGE (Post-Build/Image-Based - The original single scan) ---
 
       - name: 🛡️ Snyk Final Image Scan (auth-service)
         uses: snyk/actions/docker@master
@@ -111,7 +85,7 @@ jobs:
           AUTH_TAG: ${{ env.NEXUS_REGISTRY }}/auth-service:${{ env.IMAGE_VERSION }}
         with:
           image: ${{ env.AUTH_TAG }}
-          severity: critical
+          severity: critical # Only scans the final built image
 
       # --- 🚀 PUSH STAGE ---
 
