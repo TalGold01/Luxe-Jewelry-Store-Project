@@ -5,7 +5,7 @@ on:
     branches:
       - main
     tags:
-      - 'v*' 
+      - 'v*'
 
 env:
   DOCKERHUB_REGISTRY: talgold01
@@ -30,10 +30,10 @@ jobs:
       - name: ⚙️ Set up Python Environment
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12' 
+          python-version: '3.12'
 
       - name: 📦 Install Pytest Dependency
-        run: pip install pytest 
+        run: pip install pytest
 
       - name: 🧪 Run Unit Tests
         working-directory: test
@@ -44,9 +44,9 @@ jobs:
 
       - name: 🏗️ Build and Tag Docker Images for Nexus
         env:
-          AUTH_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-auth-service-latest
-          BACKEND_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-backend-latest
-          FRONTEND_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-frontend-latest
+          AUTH_SOURCE_TAG: talgold01/luxe-jewelry-store-project-auth-service-latest
+          BACKEND_SOURCE_TAG: talgold01/luxe-jewelry-store-project-backend-latest
+          FRONTEND_SOURCE_TAG: talgold01/luxe-jewelry-store-project-frontend-latest
           AUTH_TAG: ${{ env.NEXUS_REGISTRY }}/auth-service:${{ env.IMAGE_VERSION }}
           BACKEND_TAG: ${{ env.NEXUS_REGISTRY }}/backend:${{ env.IMAGE_VERSION }}
           FRONTEND_TAG: ${{ env.NEXUS_REGISTRY }}/frontend:${{ env.IMAGE_VERSION }}
@@ -56,10 +56,10 @@ jobs:
           
           docker compose build \
             --build-arg IMAGE_VERSION=${{ env.IMAGE_VERSION }} \
-            auth-service backend frontend 
+            auth-service backend frontend
           
           echo "=== BUILT IMAGES ==="
-          docker images | grep ${{ env.PROJECT_NAME }} || true
+          docker images | grep luxe || true
           
           docker tag $AUTH_SOURCE_TAG $AUTH_TAG
           docker tag $BACKEND_SOURCE_TAG $BACKEND_TAG
@@ -74,36 +74,32 @@ jobs:
           echo "All images built and tagged successfully."
 
       - name: 🛡️ Debug: Verify Images Exist Before Snyk Scan
-        env:
-          AUTH_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-auth-service-latest
-          BACKEND_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-backend-latest
-          FRONTEND_SOURCE_TAG: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-frontend-latest
         run: |
           echo "Checking if local images exist:"
-          docker image inspect $AUTH_SOURCE_TAG || echo "❌ AUTH image not found"
-          docker image inspect $BACKEND_SOURCE_TAG || echo "❌ BACKEND image not found" 
-          docker image inspect $FRONTEND_SOURCE_TAG || echo "❌ FRONTEND image not found"
-          echo "All Docker images:"
+          docker image inspect talgold01/luxe-jewelry-store-project-auth-service-latest >/dev/null 2>&1 && echo "✅ AUTH image found" || echo "❌ AUTH image not found"
+          docker image inspect talgold01/luxe-jewelry-store-project-backend-latest >/dev/null 2>&1 && echo "✅ BACKEND image found" || echo "❌ BACKEND image not found"
+          docker image inspect talgold01/luxe-jewelry-store-project-frontend-latest >/dev/null 2>&1 && echo "✅ FRONTEND image found" || echo "❌ FRONTEND image not found"
+          echo "=== ALL DOCKER IMAGES ==="
           docker images | head -20
 
       - name: 🛡️ Snyk Container Scan - Auth Service
         uses: snyk/actions/docker@master
         with:
-          image: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-auth-service-latest
+          image: talgold01/luxe-jewelry-store-project-auth-service-latest
           args: --severity-threshold=critical --json
         continue-on-error: true
 
       - name: 🛡️ Snyk Container Scan - Backend
         uses: snyk/actions/docker@master
         with:
-          image: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-backend-latest
+          image: talgold01/luxe-jewelry-store-project-backend-latest
           args: --severity-threshold=critical --json
         continue-on-error: true
 
       - name: 🛡️ Snyk Container Scan - Frontend
         uses: snyk/actions/docker@master
         with:
-          image: ${{ env.DOCKERHUB_REGISTRY }}/${{ env.PROJECT_NAME }}-frontend-latest
+          image: talgold01/luxe-jewelry-store-project-frontend-latest
           args: --severity-threshold=critical --json
         continue-on-error: true
 
