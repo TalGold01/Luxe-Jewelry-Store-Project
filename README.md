@@ -29,7 +29,6 @@ The entire application stack is containerized. Docker Compose is configured to s
 
 **Prerequisites:** [Docker](https://www.docker.com/products/docker-desktop/) and Docker Compose installed.
 
-```bash
 # Clone the repository and build the cluster
 git clone [https://github.com/TalGold01/Luxe-Jewelry-Store-Project.git](https://github.com/TalGold01/Luxe-Jewelry-Store-Project.git)
 cd Luxe-Jewelry-Store-Project
@@ -49,7 +48,6 @@ If you wish to run the application locally outside of Docker for active developm
 
 Prerequisites: Python 3.8+ and Node.js 14+
 Step 1: Authentication Service
-Bash
 
 cd src/auth-service
 python3 -m venv venv
@@ -63,7 +61,6 @@ cp .env.example .env
 uvicorn main:app --reload --port 8001
 
 Step 2: Main API Service
-Bash
 
 cd ../backend
 python3 -m venv venv
@@ -78,7 +75,6 @@ cp .env.example .env
 uvicorn main:app --reload --port 8000
 
 Step 3: React Frontend
-Bash
 
 cd ../jewelry-store
 npm install
