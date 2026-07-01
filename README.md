@@ -35,6 +35,7 @@ git clone [https://github.com/TalGold01/Luxe-Jewelry-Store-Project.git](https://
 cd Luxe-Jewelry-Store-Project
 docker-compose up --build
 
+```text
 Services Started:
 
     Frontend UI: http://localhost:3000
@@ -49,8 +50,8 @@ If you wish to run the application locally outside of Docker for active developm
 
 Prerequisites: Python 3.8+ and Node.js 14+
 Step 1: Authentication Service
-Bash
 
+```bash
 cd src/auth-service
 python3 -m venv venv
 source venv/bin/activate
@@ -62,9 +63,11 @@ cp .env.example .env
 # Launch the service
 uvicorn main:app --reload --port 8001
 
-Step 2: Main API Service
-Bash
+```text
 
+Step 2: Main API Service
+
+```bash
 cd ../backend
 python3 -m venv venv
 source venv/bin/activate
@@ -77,8 +80,10 @@ cp .env.example .env
 # Launch the service
 uvicorn main:app --reload --port 8000
 
+```text
 Step 3: React Frontend
-Bash
+
+```bash
 
 cd ../jewelry-store
 npm install
@@ -89,6 +94,7 @@ cp .env.example .env
 # Launch the React dev server
 npm start
 
+```text
 Step 4: Verify Deployment
 
 Open your browser at http://localhost:3000 and test the following application flows:
