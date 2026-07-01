@@ -35,7 +35,7 @@ git clone [https://github.com/TalGold01/Luxe-Jewelry-Store-Project.git](https://
 cd Luxe-Jewelry-Store-Project
 docker-compose up --build
 
-```text
+```markdown
 Services Started:
 
     Frontend UI: http://localhost:3000
@@ -63,8 +63,7 @@ cp .env.example .env
 # Launch the service
 uvicorn main:app --reload --port 8001
 
-```text
-
+```markdown
 Step 2: Main API Service
 
 ```bash
@@ -80,7 +79,7 @@ cp .env.example .env
 # Launch the service
 uvicorn main:app --reload --port 8000
 
-```text
+```markdown
 Step 3: React Frontend
 
 ```bash
@@ -94,7 +93,7 @@ cp .env.example .env
 # Launch the React dev server
 npm start
 
-```text
+```markdown
 Step 4: Verify Deployment
 
 Open your browser at http://localhost:3000 and test the following application flows:
