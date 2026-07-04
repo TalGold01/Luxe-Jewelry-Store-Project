@@ -2,3 +2,5 @@ venv/
 results.xml
 .env
 .env
+node_modules/
+__pycache__/
